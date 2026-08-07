@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家庭监控屏</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b26;
+  --card2: #1c2333;
+  --border: #262f42;
+  --text: #e8ecf4;
+  --muted: #7d8aa3;
+  --green: #3ddc97;
+  --red: #ff6b6b;
+  --blue: #58a6ff;
+  --amber: #f0b429;
+  --accent: #7c6cf0;
+  --big: 40px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  display: flex; flex-direction: column;
+}
+/* 动态背景:深色极光缓慢流动,填充卡片间空白(纯 CSS 动画,GPU 合成,低开销) */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(650px 420px at 12% 88%, rgba(124,108,240,.14), transparent 70%),
+    radial-gradient(720px 460px at 88% 92%, rgba(88,166,255,.10), transparent 70%),
+    radial-gradient(520px 360px at 45% 108%, rgba(61,220,151,.07), transparent 70%),
+    radial-gradient(500px 340px at 70% 60%, rgba(124,108,240,.05), transparent 70%);
+  animation: aurora 20s ease-in-out infinite alternate;
+}
+@keyframes aurora {
+  0%   { transform: translate(0, 0) scale(1); opacity: .65; }
+  50%  { transform: translate(-24px, -14px) scale(1.05); opacity: .9; }
+  100% { transform: translate(18px, -26px) scale(1.1); opacity: .75; }
+}
+header, .overview, .forecast, main { position: relative; z-index: 1; }
+/* 顶部 */
+header {
+  flex-shrink: 0;
+  background: rgba(13,17,23,.95); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 18px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+header h1 { font-size: 23px; font-weight: 700; letter-spacing: 1px; }
+.hdr-right { display: flex; align-items: baseline; gap: 20px; }
+.hdr-item { font-size: 16px; color: var(--muted); }
+.hdr-clock { font-size: 21px; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+.hdr-wan { display: flex; align-items: baseline; gap: 12px; font-size: 12px; }
+.hdr-wan-item { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hdr-wan-item b { color: var(--text); }
+.hdr-wan-item .d { color: var(--green); }
+.hdr-wan-item .u { color: var(--amber); }
+
+main { flex: 1; min-height: 0; padding: 8px 18px 10px; }
+
+/* 统一内容网格:9列 x 6行,行高一致(全部 1fr 均分) */
+.grid {
+  display: grid; width: 100%; height: 100%;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  grid-auto-rows: 1fr; gap: 8px;
+  grid-auto-flow: dense;  /* 大卡留孔回填,压缩行数 */
+  overflow-y: auto; align-content: start;
+}
+/* 预报卡(24h / 7天:横向 4 格宽,可横向滚动,隐藏滚动条;带设备卡式角标) */
+.fc-bar {
+  min-height: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 10px; padding-top: 40px; display: flex; flex-direction: column; overflow: hidden;
+}
+.card.fc-24h { grid-column: span 5; grid-row: span 1; overflow-x: hidden; }  /* 24h 5格(WAN 移到顶部后第一行空一格),不滚动,24点全显示 */
+.card.fc-7d { grid-column: span 4; grid-row: span 1; overflow-x: auto; scrollbar-width: none; }
+.card.fc-24h .top, .card.fc-7d .top { top: 6px; left: 10px; }
+.fc-24h::-webkit-scrollbar, .fc-7d::-webkit-scrollbar { display: none; }
+.fc-inner { display: flex; gap: 3px; width: max-content; flex: 1; align-items: stretch; }
+.card.fc-24h .fc-inner { width: 100%; gap: 1px; }
+.fc-spark-wrap { width: 100%; padding: 0 4px 2px; }
+.fc-spark { display: block; width: 100%; height: 52px; }
+.fc-spark polyline { vector-effect: non-scaling-stroke; }
+.fc-spark text { paint-order: stroke; stroke: var(--card); stroke-width: 2.5px; stroke-linejoin: round; }
+.card.fc-24h .fc-inner .fc-h {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0;
+  border-right: 1px solid var(--border); padding: 4px 1px 0;  /* 内容贴顶,间距压缩 */
+}
+.fc-inner .fc-h:last-child { border-right: none; }
+.card.fc-24h .fc-inner .fc-h-time { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.card.fc-24h .fc-inner .fc-h-icon { font-size: 16px; line-height: 1.1; }
+.card.fc-24h .fc-inner .fc-h-temp { font-weight: 600; font-size: 13px; }
+.card.fc-24h .fc-inner .fc-h-desc { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.fc-inner .fc-d {
+  width: 110px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0;
+  border-right: 1px solid var(--border); padding: 6px 4px 0;  /* 内容贴顶 */
+}
+.fc-inner .fc-d:last-child { border-right: none; }
+.fc-inner .fc-d-day { color: var(--muted); font-size: 14px; }
+.fc-inner .fc-d-icon { font-size: 22px; line-height: 1.1; }
+.fc-inner .fc-d-temp { font-weight: 600; font-size: 18px; }
+.fc-inner .fc-d-temp b { color: var(--amber); }
+.fc-inner .fc-d-desc { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* 当前天气卡 */
+.wx-card { display: flex; flex-direction: column; justify-content: center; align-items: center; padding-top: 40px; text-align: center; background: linear-gradient(160deg, rgba(240,180,41,.10), var(--card)); border: 1px dashed rgba(240,180,41,.3); }
+.wx-card .wx-t { font-size: 30px; font-weight: 700; color: var(--amber); }
+.wx-card .wx-d { font-size: 14px; margin-top: 2px; }
+.wx-card .wx-x { font-size: 12px; color: var(--muted); margin-top: 4px; }
+/* 室内温湿度卡 */
+.climate-card { display: flex; flex-direction: column; justify-content: center; align-items: center; padding-top: 40px; text-align: center; background: linear-gradient(160deg, rgba(88,166,255,.10), var(--card)); border: 1px dashed rgba(88,166,255,.3); }
+.climate-card .cc-t { font-size: 26px; font-weight: 700; color: var(--blue); }
+.climate-card .cc-h { font-size: 16px; color: var(--green); margin-top: 2px; }
+.climate-card .cc-l { font-size: 12px; color: var(--muted); margin-top: 3px; }
+/* WAN 出口信息块(右上角,紧凑非卡片) */
+.wan-info {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 4px 10px; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.wan-info .wi-title { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 1px; }
+.wan-info .wc-row { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.wan-info .wc-row b { color: var(--text); min-width: 44px; text-align: right; }
+.wan-info .wc-row .down { color: var(--green); }
+.wan-info .wc-row .up { color: var(--amber); }
+.wan-info .wc-row .conn { color: var(--muted); }
+/* 网络设备大卡(父卡,内含子卡网格,设备数自适应行高) */
+.card.net-group {
+  grid-column: span 3; grid-row: span 3;  /* 3列×3行 */
+  display: flex; flex-direction: column;
+  padding: 8px 10px;
+}
+.net-group .top { position: absolute; top: 8px; left: 10px; z-index: 2; display: flex; align-items: center; gap: 6px; }
+.net-group .top .icon { font-size: 27px; line-height: 1; }
+.net-group .top .nm { font-size: 16px; font-weight: 600; }
+.net-group .ng-title { font-size: 12px; color: var(--muted); margin-bottom: 4px; margin-top: 0; }
+.net-group .ng-grid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: 1fr; gap: 5px;  /* 设备少行高更大,多则压缩 */
+}
+.net-sub {
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 8px; cursor: pointer; transition: border-color .15s;
+  display: flex; flex-direction: column; justify-content: center; min-height: 0;
+}
+.net-sub:hover { border-color: var(--accent); }
+.net-sub .n { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.net-sub .m { font-size: 10px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.net-sub .nr { display: flex; gap: 7px; font-size: 11px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.net-sub .r-down { color: var(--blue); }
+.net-sub .r-up { color: var(--green); }
+.net-sub .r-conn { color: var(--amber); }
+
+/* 状态总览条(header 下方):室内外温湿度 + WAN 出口流量 */
+.overview {
+  display: flex; align-items: center; gap: 32px;
+  padding: 7px 18px; background: linear-gradient(90deg, rgba(37,99,235,.14), rgba(37,99,235,.03));
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; flex-shrink: 0;
+}
+.ov-sec { display: flex; align-items: baseline; gap: 8px; }
+.ov-label { color: var(--muted); font-size: 14px; }
+.ov-val { font-weight: 700; }
+.ov-climate .ov-val { font-size: 22px; color: var(--text); }
+.ov-weather .ov-val { font-size: 26px; color: var(--amber); }
+.ov-weather .ov-val .ov-desc { color: var(--text); font-size: 16px; font-weight: 500; }
+.ov-weather .ov-val .ov-src { color: var(--muted); font-size: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 0 5px; }
+.ov-wans { margin-left: auto; display: flex; gap: 28px; }
+.ov-wan { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.ov-wan b { color: var(--text); font-size: 16px; }
+.ov-wan .down { color: var(--green); font-variant-numeric: tabular-nums; }
+.ov-wan .up { color: var(--amber); font-variant-numeric: tabular-nums; }
+.ov-wan .conn { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 天气预报条:24h 小时级 + 7 天 */
+.forecast {
+  display: flex; align-items: center; gap: 24px;
+  padding: 4px 18px; background: var(--card);
+  border-bottom: 1px solid var(--border); font-size: 14px;
+  flex-shrink: 0; overflow-x: auto;
+}
+.fc-hourly { display: flex; gap: 6px; }
+.fc-h { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 44px; }
+.fc-h-time { color: var(--muted); font-size: 13px; }
+.fc-h-icon { font-size: 18px; line-height: 1; }
+.fc-h-temp { font-weight: 600; font-size: 15px; }
+.fc-h-desc { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fc-daily { display: flex; gap: 14px; margin-left: auto; }
+.fc-d { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 62px; }
+.fc-d-day { color: var(--muted); font-size: 13px; }
+.fc-d-icon { font-size: 18px; line-height: 1; }
+.fc-d-temp { font-weight: 600; font-size: 15px; }
+.fc-d-temp b { color: var(--amber); }
+.fc-d-desc { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* 区块:左右分栏 */
+.section { display: flex; flex-direction: column; min-height: 0; }
+#mi-area { flex: 1.7; }
+#net-area { flex: 1; }
+
+/* 区块标题 */
+.section-title {
+  font-size: 15px; color: var(--muted); margin: 2px 2px 6px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+.card {
+  background: linear-gradient(160deg, var(--card2), var(--card));
+  border: 1px solid var(--border); border-radius: 13px; padding: 10px;
+  position: relative; overflow: hidden;
+  grid-row: span 1;
+}
+.card.wide { grid-column: span 2; grid-row: span 2; padding-top: 52px; }  /* 2x2:空调,内容下移让出左上角图标 */
+.card.cam-big { grid-column: span 3; grid-row: span 3; display: flex; flex-direction: column; justify-content: center; }  /* 摄像机 3x3,内容垂直居中 */
+.card.cam-big .ctl { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }  /* 视频/控制区分隔线 */
+.card:not(.wide) { display: flex; flex-direction: column; justify-content: center; padding-top: 48px; }  /* 1x1 卡内容垂直居中,让出左上角图标+名称 */
+/* 无 .top 图标的卡(信息/天气/温湿度)不继承 48px 顶部空白,内容贴顶 */
+.card.info-card, .card.info-mini, .card.add-card,
+.card.wx-card, .card.climate-card { padding-top: 10px; }
+/* 有 .top 角标的卡(网络大卡)保留 48px 让位;WAN 内容严格居中(角标浮左上不重叠) */
+.card.net-group { padding-top: 48px; }
+.card.wan-card { padding-top: 10px; }
+.card.offline { opacity: .5; }
+.card .top {
+  position: absolute; top: 8px; left: 10px; right: auto; z-index: 1;
+  display: flex; align-items: center; gap: 6px; margin-bottom: 0;
+  cursor: grab;
+}
+.card .top .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 在线设备无徽标(仅离线显示"离线"徽标);1x1 卡顶部窄,名称限宽避免顶到电源按钮 */
+.card:not(.wide) .top { max-width: calc(100% - 56px); }
+.card:not(.wide) .top .nm { max-width: 170px; white-space: normal; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.card .icon { font-size: 27px; line-height: 1; }
+.card .nm { font-size: 16px; font-weight: 600; }
+.card .rm { font-size: 12px; color: var(--muted); margin-top: 0; }
+/* 电源按钮固定右上角(与内容解耦) */
+.card .pwr { position: absolute; top: 8px; right: 10px; z-index: 2; }
+.card .pwr .power-btn { width: 40px; height: 40px; font-size: 16px; }
+/* 紧凑半高卡:内容少的设备(路由器/温湿度计/风扇等) */
+.card.compact { padding-left: 8px; padding-right: 8px; padding-bottom: 8px; }  /* 不覆盖 padding-top(48px 让出左上角图标) */
+.card.compact .top { margin-bottom: 2px; }
+.card.compact .icon { font-size: 20px; }
+.card.compact .nm { font-size: 14px; }
+.card.compact .rm { font-size: 11px; }
+.card.compact .bigval { padding: 0; }
+.card.compact .bigval .v { font-size: 28px; }
+.card.compact .bigval .v small { font-size: 12px; }
+.card.compact .bigval .l { font-size: 11px; margin-top: 0; }
+.card.compact .ctl { gap: 3px; margin-top: 0; }
+.card.compact .ctl-row { min-height: 20px; }
+.card.compact .ctl-label { font-size: 12px; }
+.card.compact .valrow { padding: 0; font-size: 12px; }
+.card.compact .mbtn { padding: 2px 6px; font-size: 11px; }
+.card.compact .power-btn { width: 34px; height: 34px; font-size: 15px; }
+.card.compact .step-btn { width: 28px; height: 28px; font-size: 15px; }
+.card.compact .step-val { font-size: 15px; min-width: 36px; }
+.card.compact .switch { width: 40px; height: 22px; }
+.card.compact .switch input:checked + .slider::before { transform: translateX(18px); }
+.card.compact .switch .slider::before { width: 16px; height: 16px; }
+.card.dragging { opacity: .4; border-style: dashed; }
+.card.drag-over { border-color: var(--accent); }
+/* 信息卡 3x3:日期/农历/当前天气/体感风日出日落(与摄像机/网络并排占一行) */
+.card.err-card { display: flex; align-items: center; justify-content: center; color: var(--amber); font-size: 14px; border: 1px dashed rgba(240,180,41,.3); background: rgba(240,180,41,.05); }
+.card.info-card.info-3x3 {
+  grid-column: span 3; grid-row: span 3;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding-top: 10px; text-align: center; gap: 6px;
+  background: linear-gradient(160deg, rgba(124,108,240,.12), var(--card));
+  border: 1px dashed rgba(124,108,240,.4);
+}
+.info-date { font-size: 28px; font-weight: 700; color: var(--text); }
+.info-date .info-week { font-size: 17px; color: var(--accent); margin-left: 6px; }
+.info-clock { font-size: 34px; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.info-lunar { font-size: 15px; color: var(--muted); margin-top: 2px; }
+.info-weather { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
+.info-weather .iw-t { font-size: 42px; font-weight: 700; color: var(--amber); }
+.info-weather .iw-d { font-size: 15px; color: var(--text); }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-top: 8px; font-size: 14px; justify-items: center; }
+.info-grid .k { color: var(--muted); margin-right: 8px; }
+.info-grid .v { font-weight: 600; }
+.info-wan { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; font-variant-numeric: tabular-nums; justify-content: center; flex-wrap: wrap; }
+.info-wan .iw-item { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.info-wan .iw-item b { color: var(--text); }
+.info-wan .iw-item .d { color: var(--green); }
+.info-wan .iw-item .u { color: var(--amber); }
+/* 信息卡 2x1 横条降级(空间不足时;无角标,内容居中) */
+.card.info-card.info-h { grid-column: span 2; grid-row: span 1; flex-direction: row; justify-content: space-around; align-items: center; gap: 12px; padding-top: 10px; }
+.info-h-left { text-align: left; }
+.info-h-right { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 14px; }
+.info-h-right .k { color: var(--muted); margin-right: 5px; }
+.info-h-right .v { font-weight: 600; }
+/* 1x1 信息小卡 */
+.card.info-mini {
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding-top: 10px; text-align: center;
+  background: linear-gradient(160deg, rgba(88,166,255,.10), var(--card));
+  border: 1px dashed rgba(88,166,255,.35);
+  font-size: 14px; color: var(--muted);
+}
+.info-mini b { font-size: 22px; color: var(--accent); }
+.info-mini .mini-fest, .info-mini .mini-week { line-height: 1.6; }
+/* 加号卡(网格末尾,打开卡片管理) */
+.card.add-card {
+  grid-column: span 1; grid-row: span 1;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 2px dashed rgba(124,108,240,.4);
+  cursor: pointer; font-size: 40px; color: rgba(124,108,240,.7);
+  transition: .15s;
+}
+.card.add-card:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,108,240,.08); }
+/* 卡片管理弹层 */
+#card-overlay .sheet { max-width: 480px; }
+.cfg-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 15px; cursor: pointer; }
+.cfg-row:last-child { border-bottom: none; }
+.cfg-row input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.cfg-list-scroll { max-height: 55vh; overflow-y: auto; }
+.cfg-sub { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.cfg-save { margin-top: 12px; width: 100%; padding: 9px 0; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+.cfg-save:hover { filter: brightness(1.15); }
+.online-badge { font-size: 12px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+.online-badge.on { background: rgba(61,220,151,.15); color: var(--green); }
+.online-badge.off { background: rgba(255,107,107,.13); color: var(--red); }
+
+/* 大数值展示 */
+.bigval { text-align: center; padding: 2px 0 6px; }
+.bigval .v { font-size: 42px; font-weight: 700; line-height: 1; }
+.bigval .v small { font-size: 17px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.bigval .l { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.temp-val { color: var(--blue); }
+.hum-val { color: var(--green); }
+
+/* 数值行 */
+.valrow {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 0; font-size: 15px;
+}
+.valrow .k { color: var(--muted); }
+.valrow .v { font-weight: 600; }
+.valrow .v.blue { color: var(--blue); }
+.valrow .v.green { color: var(--green); }
+.valrow .v.amber { color: var(--amber); }
+
+/* 控制区 */
+.ctl { margin-top: 2px; display: flex; flex-direction: column; gap: 4px; }
+.ctl-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 28px; }
+.ctl-label { font-size: 14px; color: var(--muted); flex-shrink: 0; }
+
+/* 开关 */
+.switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; inset: 0; background: #333d52; border-radius: 24px; transition: .2s; cursor: pointer; }
+.slider::before { content: ""; position: absolute; width: 18px; height: 18px; border-radius: 50%; left: 3px; top: 3px; background: #aab4c8; transition: .2s; }
+.switch input:checked + .slider { background: var(--green); }
+.switch input:checked + .slider::before { background: #fff; transform: translateX(20px); }
+.switch.busy { opacity: .5; pointer-events: none; }
+
+/* 主电源大按钮 */
+.power-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: 2px solid #333d52;
+  background: transparent; color: var(--muted); font-size: 21px; cursor: pointer;
+  transition: .2s; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
+.power-btn.on { border-color: var(--green); color: var(--green); background: rgba(61,220,151,.12); box-shadow: 0 0 14px rgba(61,220,151,.25); }
+.power-btn.busy { opacity: .5; pointer-events: none; }
+
+/* 按钮组 */
+.btn-group { display: flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }  /* 模式按钮一行(空调 wide 465px/加湿器 228px 都够) */
+.mbtn {
+  padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card); color: var(--muted); font-size: 14px; cursor: pointer; transition: .15s;
+}
+.mbtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.mbtn:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+.mbtn.busy { opacity: .5; pointer-events: none; }
+
+/* 温度加减 */
+.step-ctl { display: flex; align-items: center; gap: 6px; }
+/* 风速滑动条 */
+.fan-slider { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.fan-slider input[type=range] { flex: 1; min-width: 0; height: 22px; accent-color: var(--accent); cursor: pointer; }
+.fs-val { font-size: 14px; font-weight: 600; color: var(--text); min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.step-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); font-size: 18px; cursor: pointer;
+}
+.step-btn:active { background: var(--accent); }
+.step-btn.busy { opacity: .5; pointer-events: none; }
+.step-val { font-size: 16px; font-weight: 700; min-width: 38px; text-align: center; color: var(--blue); }
+
+/* 网络设备 — 右栏,行高按内容 */
+.net-grid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-auto-rows: minmax(80px, 1fr); gap: 5px;  /* 行高自适应:设备少时卡变大填满,多时压缩 */
+}
+.net-item {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 9px; cursor: pointer; transition: border-color .15s;
+}
+.net-item:hover { border-color: var(--accent); }
+.net-item .n { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.net-item .m { font-size: 12px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.net-rate { display: flex; gap: 10px; margin-top: 3px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.r-down { color: var(--blue); }
+.r-up { color: var(--green); }
+.r-conn { color: var(--amber); }
+.net-item.off { opacity: .55; cursor: default; }
+.net-item.off:hover { border-color: var(--border); }
+.badge { font-size: 12px; padding: 2px 7px; border-radius: 20px; font-weight: 600; flex-shrink: 0; }
+.badge.on { background: rgba(61,220,151,.15); color: var(--green); }
+.badge.off { background: rgba(255,107,107,.12); color: var(--red); }
+.net-collapse {
+  grid-column: 1 / -1;
+  background: var(--card); border: 1px dashed var(--border); border-radius: 8px;
+  padding: 6px 10px; font-size: 13px; color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+}
+.net-collapse:hover { color: var(--text); border-color: var(--accent); }
+.net-collapse .tri { font-size: 11px; transition: transform .2s; }
+.net-collapse.open .tri { transform: rotate(90deg); }
+
+.loading { color: var(--muted); text-align: center; padding: 50px 0; font-size: 14px; }
+.err {
+  background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.3);
+  color: var(--red); border-radius: 10px; padding: 10px; font-size: 13px; margin: 10px 0;
+}
+
+/* 详情弹层 */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 20;
+  display: none; align-items: center; justify-content: center;
+}
+.overlay.show { display: flex; }
+.cam-frame {
+  background: #000; border-radius: 14px; padding: 14px;
+  width: min(1180px, 94vw); height: min(760px, 88vh);
+  position: relative; display: flex; flex-direction: column; gap: 10px;
+}
+.cam-frame .close { position: absolute; top: 10px; right: 12px; z-index: 5; }
+.cam-title { color: var(--text); font-size: 14px; font-weight: 600; padding-right: 40px; }
+#cam-frame-slot { flex: 1; min-height: 0; border-radius: 8px; background: #000; overflow: hidden; position: relative; }
+#cam-frame-slot iframe { width: 100%; height: 100%; border: none; display: block; }
+/* 摄像头 iframe 常驻容器(2026-08-06):iframe 永不下树,10s 刷新 grid 重建
+   不会销毁它(下树→重载→等关键帧→周期性断流)。用 fixed 定位模拟
+   卡片小画面 / 弹层放大两种形态,pointer-events:none 让点击穿透到卡片。 */
+#cam-float {
+  position: fixed; z-index: 15; overflow: hidden; border-radius: 8px;
+  background: #000; pointer-events: none;
+}
+#cam-float iframe { width: 100%; height: 100%; border: none; display: block; }
+/* 卡片内实时画面 — 16:9 匹配摄像头流比例(640×360),无黑边 */
+.cam-live {
+  aspect-ratio: 16 / 9;
+  border-radius: 8px; overflow: hidden; background: #000;
+  position: relative; cursor: zoom-in; border: 1px solid var(--border);
+}
+.cam-live iframe { width: 100%; height: 100%; border: none; display: block; }
+.cam-live-hint {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 13px; pointer-events: none; z-index: 1;
+}
+.cam-live.loaded .cam-live-hint { display: none; }
+.cam-live .cam-badge {
+  position: absolute; top: 5px; left: 6px; z-index: 2; font-size: 11px;
+  background: rgba(0,0,0,.55); color: #8f8; padding: 1px 6px; border-radius: 8px; pointer-events: none;
+}
+.cam-view {
+  margin-top: 6px; width: 100%; padding: 7px 0; border: none; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.cam-view:hover { filter: brightness(1.1); }
+.sheet {
+  background: var(--card); width: 100%; max-width: 440px;
+  border-radius: 14px; padding: 16px; max-height: 80vh; overflow-y: auto;
+  border: 1px solid var(--border);
+}
+.sheet h2 { font-size: 16px; margin-bottom: 3px; }
+.sheet .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.close { float: right; background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; }
+.prop-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.prop-row:last-child { border-bottom: none; }
+.prop-name { color: var(--muted); font-size: 12px; }
+.prop-val { font-weight: 600; }
+
+/* 连接行 */
+.conn-row {
+  padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.conn-row:last-child { border-bottom: none; }
+.conn-main { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.conn-app { font-weight: 600; color: var(--blue); }
+.conn-dst { color: var(--text); font-variant-numeric: tabular-nums; }
+.conn-proto { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.conn-meta { color: var(--muted); font-size: 11px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+/* 拖拽提示 */
+.drag-hint { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+@media (max-width: 600px) {
+  .card.wide { grid-column: span 1; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .net-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏠 家庭监控屏</h1>
+  <span id="hdr-wan" class="hdr-item hdr-wan">--</span>
+</header>
+<main>
+  <div id="mi-grid" class="grid"><div class="loading">加载中…</div></div>
+</main>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<!-- 卡片管理弹层 -->
+<div class="overlay" id="card-overlay" onclick="if(event.target===this)closeCardManager()">
+  <div class="sheet">
+    <h2>卡片管理 <button class="close" onclick="closeCardManager()">✕</button></h2>
+    <div class="sub">勾选信息卡和设备,保存后所有设备同步;卡片可拖拽交换位置</div>
+    <div id="cfg-list" class="cfg-list-scroll"></div>
+    <button class="cfg-save" onclick="saveCardCfg(); closeCardManager()">保存</button>
+  </div>
+</div>
+
+<div class="overlay" id="camera-overlay" onclick="if(event.target===this)closeCamera()">
+  <div class="cam-frame">
+    <button class="close" onclick="closeCamera()">✕</button>
+    <div class="cam-title">📹 客厅摄像头</div>
+    <div id="cam-frame-slot"></div>
+  </div>
+</div>
+
+<!-- 摄像头 iframe 常驻容器:10s 刷新不销毁,定位跟随卡片/弹层 -->
+<div id="cam-float" style="display:none"></div>
+
+<!-- JS 拆模块(2026-08-07):按依赖顺序加载,保持全局函数(内联 onclick 依赖) -->
+<script src="/static/js/core.js"></script>
+<script src="/static/js/controls.js"></script>
+<script src="/static/js/layout.js"></script>
+<script src="/static/js/cards.js"></script>
+<script src="/static/js/render.js"></script>
+<script src="/static/js/camera.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>

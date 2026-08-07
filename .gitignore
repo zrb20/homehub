@@ -1,0 +1,16 @@
+# miloco 运行环境(大,从运行机器导出,不入库)
+site-packages/
+
+# miloco 数据(含小米 OAuth token 等凭据,绝对不入库!)
+miloco-data/
+data/
+
+# 运行时产物
+__pycache__/
+*.pyc
+*.bak*
+*.log
+
+# 环境配置(凭据)
+.env
+*.env
