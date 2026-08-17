@@ -41,6 +41,26 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// 监控屏软件开关(2026-08-07): 调 N4500 容器的 screen-power HTTP 服务
+// http://192.168.203.25:8125/off 熄屏 /on 亮屏 /status 查询
+let screenPowerOn = true;
+async function toggleScreenPower() {
+  try {
+    const st = await fetch('http://192.168.203.25:8125/status').then(r => r.json());
+    screenPowerOn = st.mode === 0;
+  } catch (e) { /* 服务不可达默认亮屏 */ }
+  const target = screenPowerOn ? 'off' : 'on';
+  try {
+    await fetch(`http://192.168.203.25:8125/${target}`);
+    screenPowerOn = !screenPowerOn;
+    const btn = document.getElementById('hdr-power');
+    if (btn) {
+      btn.textContent = screenPowerOn ? '🌙 熄屏' : '☀️ 亮屏';
+      btn.title = screenPowerOn ? '熄屏' : '亮屏';
+    }
+  } catch (e) { /* 忽略 */ }
+}
+
 // ---------- 控制发送 ----------
 async function sendControl(did, specName, value) {
   if (busy[did]) return;

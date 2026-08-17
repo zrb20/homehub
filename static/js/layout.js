@@ -2,6 +2,12 @@ let cardList = null;    // [{t:'d',id}, {t:'i'}, {t:'m',k}, {t:'add'}]
 let hiddenDevices = []; // 隐藏的设备 did
 let dragKey = null;
 
+// 设备类型:窄屏(手机/平板)用 mobile 布局,宽屏(监控屏)用 desktop(2026-08-07)
+function layoutDev() {
+  return (window.matchMedia && window.matchMedia('(max-width: 1200px)').matches)
+    ? 'mobile' : 'desktop';
+}
+
 function cardKey(item) {
   if (item.t === 'd') return 'd:' + item.id;
   if (item.t === 'net') return 'net';
@@ -60,7 +66,7 @@ function getCardList() {
 }
 async function initOrder() {
   try {
-    const d = await api('/api/layout/order');
+    const d = await api('/api/layout/order?dev=' + layoutDev());
     if (Array.isArray(d.list) && d.list.length) {
       cardList = ensureFixedInList(d.list.filter(x => x && x.t));
       hiddenDevices = Array.isArray(d.hidden) ? d.hidden : [];
@@ -76,7 +82,7 @@ async function initOrder() {
   } catch (e) {}
 }
 function saveOrder() {
-  fetch('/api/layout/order', {
+  fetch('/api/layout/order?dev=' + layoutDev(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ list: cardList, hidden: hiddenDevices }),

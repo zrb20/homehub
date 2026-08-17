@@ -13,6 +13,7 @@ async function ensureCamIframe() {
     camIframe = document.createElement('iframe');
     camIframe.setAttribute('allow', 'autoplay');
     camIframe.src = camWatchUrl;
+    bindCamScroll();  // 滚动/缩放时跟随重定位(手机端)(2026-08-07)
     camIframe.onload = () => {
       const live = document.querySelector('.cam-live');
       if (live) live.classList.add('loaded');
@@ -40,6 +41,20 @@ function positionCamFloat() {
     + 'width:' + r.width + 'px;height:' + r.height + 'px;'
     + 'z-index:' + (big ? 30 : 15) + ';overflow:hidden;border-radius:8px;'
     + 'background:#000;pointer-events:none;';
+}
+
+// 滚动时重定位摄像头 iframe(手机端页面可滚动, fixed 相对视口需要跟随)(2026-08-07)
+let _camScrollBind = false;
+function bindCamScroll() {
+  if (_camScrollBind) return;
+  _camScrollBind = true;
+  // 用 passive:true 减少滚动卡顿(只读定位不 preventDefault)
+  window.addEventListener('scroll', () => {
+    if (camIframe && camIframe.style.display !== 'none') positionCamFloat();
+  }, { passive: true, capture: true });
+  window.addEventListener('resize', () => {
+    if (camIframe) positionCamFloat();
+  });
 }
 
 // 点击卡片画面 / 放大按钮 → 弹层放大(只改 overlay 状态 + 重定位,不动 iframe)

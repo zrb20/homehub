@@ -916,13 +916,20 @@ LAYOUT_FILE = os.environ.get("LAYOUT_FILE", "/data/layout.json")
 
 
 @app.get("/api/layout/order")
-def layout_order():
-    """返回卡片排布(通用卡列表 + 隐藏设备)。兼容旧格式 {"order": [did...]}。"""
+def layout_order(dev: str = "desktop"):
+    """返回卡片排布(通用卡列表 + 隐藏设备),按设备类型分存(2026-08-07)。
+    兼容旧平面格式 {"list":[...],"hidden":[...]} 和更旧 {"order":[did...]}。
+    前端带 ?dev=mobile|desktop;默认 desktop。"""
+    dev = dev if dev in ("desktop", "mobile") else "desktop"
     try:
         with open(LAYOUT_FILE, encoding="utf-8") as f:
-            return json.load(f)
+            raw = json.load(f)
     except Exception:
-        return {"list": [], "hidden": []}
+        raw = {}
+    # 平面旧格式 → 转 desktop(向后兼容)
+    if "list" in raw or "order" in raw or "hidden" in raw:
+        return raw
+    return raw.get(dev, {"list": [], "hidden": []})
 
 
 class OrderRequest(BaseModel):
@@ -932,16 +939,26 @@ class OrderRequest(BaseModel):
 
 
 @app.post("/api/layout/order")
-def layout_order_save(req: OrderRequest):
+def layout_order_save(req: OrderRequest, dev: str = "desktop"):
     try:
         os.makedirs(os.path.dirname(LAYOUT_FILE), exist_ok=True)
-        data = {}
+        # 读现有(保持另一设备类型不动)
+        try:
+            with open(LAYOUT_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        # 平面旧格式 → 包一层 desktop
+        if "list" in data or "order" in data or "hidden" in data:
+            data = {"desktop": data}
+        dev = dev if dev in ("desktop", "mobile") else "desktop"
+        cur = data.setdefault(dev, {})
         if req.card_list is not None:
-            data["list"] = req.card_list
+            cur["list"] = req.card_list
         if req.hidden is not None:
-            data["hidden"] = req.hidden
-        if req.order is not None and "list" not in data:
-            data["order"] = req.order  # 旧格式原样存
+            cur["hidden"] = req.hidden
+        if req.order is not None and "list" not in cur:
+            cur["order"] = req.order  # 旧格式原样存
         with open(LAYOUT_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
         return {"ok": True}

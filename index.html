@@ -55,6 +55,8 @@ header h1 { font-size: 23px; font-weight: 700; letter-spacing: 1px; }
 .hdr-item { font-size: 16px; color: var(--muted); }
 .hdr-clock { font-size: 21px; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
 .hdr-wan { display: flex; align-items: baseline; gap: 12px; font-size: 12px; }
+.hdr-power { margin-left: 12px; background: var(--card2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 12px; font-size: 16px; cursor: pointer; min-width: 72px; text-align: center; }
+.hdr-power:hover { background: var(--accent); color: #fff; }
 .hdr-wan-item { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hdr-wan-item b { color: var(--text); }
 .hdr-wan-item .d { color: var(--green); }
@@ -82,11 +84,10 @@ main { flex: 1; min-height: 0; padding: 8px 18px 10px; }
 .card.fc-24h .top, .card.fc-7d .top { top: 6px; left: 10px; }
 .fc-24h::-webkit-scrollbar, .fc-7d::-webkit-scrollbar { display: none; }
 .fc-inner { display: flex; gap: 3px; width: max-content; flex: 1; align-items: stretch; }
-.card.fc-24h .fc-inner { width: 100%; gap: 1px; }
-.fc-spark-wrap { width: 100%; padding: 0 4px 2px; }
+.card.fc-24h .fc-inner { width: 100%; gap: 1px; flex-wrap: wrap; }  /* wrap: spark 独占一行,fc-h 换行在下面(2026-08-07) */
+.fc-spark-wrap { width: 100%; padding: 0 4px 2px; flex: 0 0 100%; }  /* 占整行(在 fc-inner flex 内)(2026-08-07) */
 .fc-spark { display: block; width: 100%; height: 52px; }
 .fc-spark polyline { vector-effect: non-scaling-stroke; }
-.fc-spark text { paint-order: stroke; stroke: var(--card); stroke-width: 2.5px; stroke-linejoin: round; }
 .card.fc-24h .fc-inner .fc-h {
   flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0;
   border-right: 1px solid var(--border); padding: 4px 1px 0;  /* 内容贴顶,间距压缩 */
@@ -505,9 +506,66 @@ main { flex: 1; min-height: 0; padding: 8px 18px 10px; }
 /* 拖拽提示 */
 .drag-hint { font-size: 13px; color: var(--muted); margin-left: auto; }
 
+/* ===== 响应式:其他设备(平板/手机/小窗口)访问时适配,不影响监控屏 1080p =====
+   监控屏 kiosk Chrome 视口固定 1920x1080 → 不触发任何断点,保持完整布局。
+   其他设备视口窄 → 自动切流式单列/双列,卡片铺满,可滚动。2026-08-07 */
+
+/* 平板/小窗口 (<1200px): 双列流式 */
+@media (max-width: 1200px) {
+  html, body { overflow: auto; height: auto; }
+  main { padding: 8px; }
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));  /* minmax(0,1fr) 防内容撑开列(2026-08-07) */
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    height: auto;
+    overflow: visible;
+  }
+  /* 所有跨行列 span 归一 */
+  .card.fc-24h, .card.fc-7d, .card.wide, .card.cam-big,
+  .card.net-group, .card.info-card, .card.info-h, .card.info-mini {
+    grid-column: span 1 !important;
+    grid-row: span 1 !important;
+  }
+  .fc-bar { padding-top: 40px; }
+  .net-group .ng-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .info-grid { grid-template-columns: 1fr 1fr; }
+  /* 空调卡内容自适应 */
+  .card.wide .ctl-row { flex-wrap: wrap; }
+}
+
+/* 手机 (<700px): 单列流式,控制优先 */
+@media (max-width: 700px) {
+  .grid { grid-template-columns: minmax(0, 1fr) !important; }  /* minmax(0,1fr) 防内容撑开列(2026-08-07) */
+  header { flex-wrap: wrap; padding: 8px 10px; }
+  header h1 { font-size: 20px; }
+  .hdr-wan { font-size: 11px; gap: 6px; }
+  .fc-bar { padding-top: 38px; }
+  /* 24h 预报手机端:折线在上面占整行,时间/图标换行在下面(和 1080p 端一致),整体横滑(2026-08-07) */
+  .fc-24h .fc-inner, .card.fc-24h .fc-inner {
+    display: flex; gap: 0; width: max-content; min-width: 100%;
+    flex-wrap: wrap;  /* 折线一行,fc-h 换行在下面 */
+    overflow: visible;
+  }
+  .card.fc-24h { overflow-x: auto; max-width: 100%; }  /* 卡片横滑,内部 max-content 内容(折线+时间)一起滚(2026-08-07) */
+  .fc-24h .fc-inner::-webkit-scrollbar { display: none; }
+  .fc-24h .fc-h, .card.fc-24h .fc-inner .fc-h { flex: 0 0 auto; width: 58px; min-width: 58px; }
+  /* 折线占整行且宽度 = 全部 fc-h 总宽(SVG 用 scrollWidth 画,跟随横滑) */
+  .fc-24h .fc-spark-wrap, .card.fc-24h .fc-inner .fc-spark-wrap { flex: 0 0 auto; width: max-content; min-width: 100%; padding: 0 4px 2px; }
+  .fc-24h .fc-spark { width: 100%; height: 52px; }
+  .fc-7d .fc-inner { gap: 0; }
+  /* 设备卡内容在手机上可读 */
+  .card .bigval { font-size: 30px; }
+  .card .ctl-row { gap: 6px; }
+  .btn-group { flex-wrap: wrap; }
+  .net-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  /* 详情 sheet 全宽 */
+  .sheet { max-width: 100% !important; width: 100%; }
+}
+
+/* 旧弱查询保留(600px 内补充,放最后避免覆盖手机单列) */
 @media (max-width: 600px) {
   .card.wide { grid-column: span 1; }
-  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .net-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 </style>
@@ -516,6 +574,7 @@ main { flex: 1; min-height: 0; padding: 8px 18px 10px; }
 <header>
   <h1>🏠 家庭监控屏</h1>
   <span id="hdr-wan" class="hdr-item hdr-wan">--</span>
+  <button id="hdr-power" class="hdr-item hdr-power" onclick="toggleScreenPower()" title="软件开关屏幕">🌙 熄屏</button>
 </header>
 <main>
   <div id="mi-grid" class="grid"><div class="loading">加载中…</div></div>

@@ -6,7 +6,7 @@ function renderMijia() {
   let html = '', used = 0;
   const LIMIT = 44;  // 设备区 = 行 2-6 共 5 行 45 格,留 1 格给加号卡
   // 预报横条(行1:24h 5格 + 7天 4格)
-  html += fcBarsHtml();
+  html += fcBarsHtml24() + fcBarsHtml7d();
   // 单轮流式:严格按 list 顺序渲染(拖拽顺序=显示顺序,信息卡/设备卡可互换)。
   // 所有卡都占 used 计数(否则 LIMIT=44 失效,mini 全渲染会溢出行2-6 变成 7 行);
   // 3x3 大卡(摄像机/net/info)不受 LIMIT 跳过(永远完整渲染),1x1/2x2 受 LIMIT。
@@ -532,6 +532,15 @@ async function loadWeather() {
     tick();
     bindFcScroll();
     drawSparkline();  // 24h 折线实测宽度重绘
+    // 手机端横滑布局稳定后重绘折线(宽度用 scrollWidth, 需等 CSS 生效)(2026-08-07)
+    setTimeout(drawSparkline, 500);
+    // 设备视口切换(手机↔桌面)时重绘折线
+    if (!window._sparkMqBound) {
+      window._sparkMqBound = true;
+      const mq = window.matchMedia('(max-width: 700px)');
+      const onMq = () => setTimeout(drawSparkline, 300);
+      mq.addEventListener('change', onMq);
+    }
   } catch (e) { /* 天气加载失败不阻塞 */ }
 }
 
@@ -546,8 +555,7 @@ function fcBarsHtml24() {
     </div>`).join('');
   return `<div class="card fc-bar fc-24h fc-scroll" data-key="fc-24h">
     <div class="top"><span class="icon">⏰</span><div><div class="nm">24h 预报</div><div class="rm"></div></div></div>
-    ${fcSparklineHtml(hours)}
-    <div class="fc-inner">${h24 || '<div class="fc-h-desc">--</div>'}</div></div>`;
+    <div class="fc-inner">${fcSparklineHtml(hours)}${h24 || '<div class="fc-h-desc">--</div>'}</div></div>`;
 }
 
 // 24h 温度折线图:渲染后 drawSparkline() 实测宽度重绘(fc-inner flex 均分,宽度不定)
@@ -559,7 +567,11 @@ function drawSparkline() {
   const inner = document.querySelector('.fc-24h .fc-inner');
   const hours = (lastWeather || {}).hourly || [];
   if (!svg || !inner || hours.length < 2) return;
-  const W = inner.clientWidth;  // 实际可用宽度(随 flex 均分)
+  const W = (window.matchMedia && window.matchMedia('(max-width: 700px)').matches)
+    ? (document.querySelector('.fc-24h .fc-h')
+        ? document.querySelector('.fc-24h .fc-h').getBoundingClientRect().width * hours.length
+        : inner.scrollWidth)  // 手机端:折线宽 = 每列宽×列数,保证点与时间列对齐(2026-08-07)
+    : inner.clientWidth;  // 桌面:实际可用宽度(随 flex 均分)
   const H = 52, PAD_TOP = 20, PAD_BOT = 5;  // 顶部留白给温度标签
   const temps = hours.map(x => parseFloat(x.temp));
   if (temps.some(t => isNaN(t))) return;
@@ -578,6 +590,7 @@ function drawSparkline() {
     `<text x="${p[0]}" y="${p[1] - 8}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text)">${Math.round(temps[i])}°</text>`).join('');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('width', W);
+  svg.style.width = W + 'px';  // 覆盖 CSS width:100%(手机端横滑用 scrollWidth)(2026-08-07)
   svg.innerHTML = `<polyline points="${line}" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${labels}`;
 }
