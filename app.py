@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 
 MILOCO_BASE_URL = os.environ.get("MILOCO_BASE_URL", "http://127.0.0.1:1810")
 MILOCO_TOKEN = os.environ.get("MILOCO_TOKEN", "")
-CAMERA_ID = os.environ.get("CAMERA_ID", "525201437")
+CAMERA_ID = os.environ.get("CAMERA_ID", "")
 ZR_DEVICE_INFO = os.environ.get("ZR_DEVICE_INFO", os.path.expanduser("~/zr_monitor/device_info.json"))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -622,9 +622,9 @@ def network_devices():
 
 # ---------- 天气(室外) ----------
 
-WEATHER_LAT = float(os.environ.get("WEATHER_LAT", "30.722"))   # 用户位置 N30°43'19"
-WEATHER_LON = float(os.environ.get("WEATHER_LON", "116.311"))  # E116°18'39"
-WEATHER_CITY_ID = os.environ.get("WEATHER_CITY_ID", "101220601")  # 安庆(中国天气网第二源,城市粒度)
+WEATHER_LAT = float(os.environ.get("WEATHER_LAT", "39.9042"))   # 默认北京,部署时用 env 覆盖
+WEATHER_LON = float(os.environ.get("WEATHER_LON", "116.4074"))  # 默认北京,部署时用 env 覆盖
+WEATHER_CITY_ID = os.environ.get("WEATHER_CITY_ID", "101010100")  # 默认北京,部署时用 env 覆盖
 QWEATHER_HOST = os.environ.get("QWEATHER_HOST", "")          # 和风私有 Host(控制台凭据详情里)
 QWEATHER_KEY = os.environ.get("QWEATHER_KEY", "")            # 和风 API Key
 _weather_cache = {"ts": 0.0, "data": None}
