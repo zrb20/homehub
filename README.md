@@ -127,7 +127,7 @@ http://<宿主机IP>:8123
 | `ZR_DEVICE_INFO` | — | 离线网络设备静态副本路径 |
 | `QWEATHER_HOST` / `QWEATHER_KEY` | — | 和风天气私有 Host / Key（可选，第 4 源） |
 | `IKUAI_URL` / `IKUAI_USER` / `IKUAI_PASS` | `http://192.168.203.1` / `admin` / — | 爱快登录凭据 |
-| `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_CITY_ID` | `30.722` / `116.311` / `101220601` | 天气坐标与城市 |
+| `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_CITY_ID` | `<纬度>` / `<经度>` / `<城市ID>` | 天气坐标与城市(按需填写) |
 
 ### 数据卷
 
@@ -242,3 +242,13 @@ http://<主机IP>:8123
 ## 许可证
 
 内部项目，私有使用。
+
+---
+
+## 依赖与免责说明
+
+- **本项目依赖小米官方 miloco(私有组件,未随仓库分发)** —— miloco 不发布在 PyPI,需自行获取并部署;仓库仅包含 HomeHub 面板本身的代码。
+- 面板通过 miloco 的本地 HTTP API 读取/控制米家设备(空调、加湿器、净化器等)。
+- 天气模块支持 4 源聚合(Open-Meteo / 中国天气网 / wttr.in / 和风天气),和风为可选第 4 源。
+- 所有凭据(爱快密码、miloco token、和风 Key)**一律通过环境变量注入**,仓库内不含任何真实凭据;参见 `.env.example`。
+- 本项目为个人学习与自用项目,仅用于**技术学习交流**,请遵守相关平台的服务条款。
